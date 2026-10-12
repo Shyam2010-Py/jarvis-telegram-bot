@@ -13,14 +13,11 @@ from telegram import Update, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
-# Load environment variables
 load_dotenv()
 
-# --- Configuration & Validation ---
 def get_env_bool(key: str, default: str) -> bool:
     return os.getenv(key, default).lower() == "true"
 
-# Required variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_TELEGRAM_ID")
 PASSWORD_HASH = os.getenv("JARVIS_PASSWORD_HASH", "")
@@ -30,7 +27,6 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
-# Limits
 DAILY_LIMIT = int(os.getenv("DAILY_MESSAGE_LIMIT", 100))
 TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 30))
 MAX_INPUT = int(os.getenv("MAX_INPUT_LENGTH", 2000))
@@ -53,20 +49,17 @@ def validate_config():
     if not verify_password_hash_format(PASSWORD_HASH):
         raise EnvironmentError("JARVIS_PASSWORD_HASH is invalid; generate it using the instructions in GUIDE.md")
 
-# Convert OWNER_ID to int safely
 try:
     OWNER_ID = int(OWNER_ID) if OWNER_ID else 0
 except ValueError:
     OWNER_ID = 0
 
-# Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# --- Database Setup ---
 DB_PATH = "jarvis_bot.db"
 
 def init_db():
@@ -114,7 +107,6 @@ def get_current_usage(user_id: int) -> int:
         result = cursor.fetchone()
         return result[0] if result else 0
 
-# --- Password authentication ---
 def verify_password_hash_format(value: str) -> bool:
     try:
         algorithm, iterations, salt_hex, digest_hex = value.split("$")
@@ -190,14 +182,12 @@ async def password_gate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     await message.reply_text("Password required. Send the access password as a message. Incorrect attempts are rate-limited.")
     return False
 
-# --- Context Management ---
 user_contexts: Dict[int, List[Dict[str, str]]] = {}
 
 def reset_context(user_id: int):
     if user_id in user_contexts:
         del user_contexts[user_id]
 
-# --- AI Integration ---
 def call_ollama(user_id: int, text: str) -> str:
     if user_id not in user_contexts:
         user_contexts[user_id] = []
@@ -225,12 +215,9 @@ def call_ollama(user_id: int, text: str) -> str:
         return answer
     except Exception as e:
         logger.error(f"Ollama API Error: {e}")
-        # We do NOT remove the user's query from context here to allow for potential retries 
-        # or context consistency, but we notify the user.
         return "⚠️ I'm having trouble connecting to my brain. Please try again later."
 
 
-# --- Telegram-friendly response formatting ---
 def format_response(text: str) -> str:
     """Convert common Markdown/LaTeX notation into readable Telegram plain text."""
     import re
@@ -238,12 +225,10 @@ def format_response(text: str) -> str:
     if not text:
         return text
 
-    # Remove Markdown/LaTeX display delimiters; Telegram does not render LaTeX.
     text = text.replace(r"\[", "").replace(r"\]", "")
     text = text.replace("$$", "").replace("$", "")
     text = re.sub(r"\\\((.*?)\\\)", r"\1", text, flags=re.DOTALL)
 
-    # Common LaTeX text and math commands.
     text = re.sub(r"\\text\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"\\mathrm\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"\\mathbf\{([^{}]*)\}", r"\1", text)
@@ -258,10 +243,8 @@ def format_response(text: str) -> str:
     for old, new in replacements.items():
         text = text.replace(old, new)
 
-    # Convert radicals before fractions so denominators like sqrt{LC} are handled.
     text = re.sub(r"√\{([^{}]*)\}", r"√(\1)", text)
 
-    # Convert common fractions to readable inline form.
     for _ in range(4):
         text = re.sub(
             r"\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}",
@@ -272,18 +255,15 @@ def format_response(text: str) -> str:
     text = text.replace(r"\%", "%").replace(r"\_", "_").replace(r"\{", "{").replace(r"\}", "}")
     text = re.sub(r"\\(?:mathrm|text|mathbf)\b", "", text)
 
-    # Remove Markdown headings/bold/italic markers without deleting the content.
     text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
     text = text.replace("**", "").replace("__", "")
     text = re.sub(r"(?m)^\s*\*\s+", "• ", text)
     text = re.sub(r"(?m)^\s*-\s+", "• ", text)
 
-    # Avoid large runs of blank lines.
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-# --- Middleware / Wrappers ---
 async def authorized_user_only(update: Update, context: ContextTypes.DEFAULT_TYPE, enforce_quota: bool = True):
     user = update.effective_user
     message = update.effective_message
@@ -299,7 +279,6 @@ async def authorized_user_only(update: Update, context: ContextTypes.DEFAULT_TYP
         return False
     return True
 
-# --- Telegram Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not user or not is_approved(user.id):
@@ -356,7 +335,6 @@ async def handle_password_or_message(update: Update, context: ContextTypes.DEFAU
         return
     await handle_message(update, context)
 
-# --- Admin Commands (Strictly Owner Only) ---
 async def approve_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         await update.message.reply_text("❌ Unauthorized. Owner only.")

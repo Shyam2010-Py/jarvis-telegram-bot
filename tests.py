@@ -6,7 +6,6 @@ from unittest.mock import patch, MagicMock
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test_token")
 os.environ.setdefault("OWNER_TELEGRAM_ID", "12345")
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
-# A deterministic test hash for password "test-pass"; generated below in helper.
 import hashlib
 _test_salt = bytes.fromhex("00112233445566778899aabbccddeeff")
 _test_digest = hashlib.pbkdf2_hmac("sha256", b"test-pass", _test_salt, 260000).hex()
